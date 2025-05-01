@@ -1,5 +1,6 @@
 import numpy as np
 import scipy as sp
+import time as t
 
 # lengths
 L5 = 1      # gripper
@@ -14,6 +15,13 @@ lengths = {
 }
 
 origin = np.array([0, 0, 0, 1])
+
+wrist = np.array([
+        [0, 0, 1, 0],
+        [0, 0, 0, 0],
+        [-1, 0, 0, 0],
+        [0, 0, 0, 0]
+    ])
 
 
 # @Deprecated
@@ -71,23 +79,65 @@ def M(n):
 
 
 def armPointsCoolerVersion(dof):
-    wrist = np.array([
-        [0, 0, 1, 0],
-        [0, 0, 0, 0],
-        [-1, 0, 0, 0],
-        [0, 0, 0, 0]
-    ])
-
-    t0 = sp.linalg.expm(wrist*dof[4])
+    t0 = sp.linalg.expm(wrist*dof[3])
     t1 = t0 @ sp.linalg.expm(s3_in_brackets(0)*dof[0])
     t2 = t1 @ sp.linalg.expm(s3_in_brackets(1)*dof[1])
     wrist_twist = t2 @ sp.linalg.expm(wrist*dof[2])
-    t3 = wrist_twist @ sp.linalg.expm(s3_in_brackets(2)*dof[3])
-    t4 = wrist_twist @ sp.linalg.expm(s3_in_brackets(2)*-dof[3])
+    t3 = wrist_twist @ sp.linalg.expm(s3_in_brackets(2)*dof[4])
+    t4 = wrist_twist @ sp.linalg.expm(s3_in_brackets(2)*-dof[4])
 
     p4 = t4 @ M(3) @ origin
     p3 = t3 @ M(3) @ origin
     p2 = t2 @ M(2) @ origin
     p1 = t1 @ M(1) @ origin
 
+    # print("coords:    ", wrist_twist @ M(3) @ origin)
+    # print("dof:       ", list(float(num) for num in dof))
     return [origin, p1, p2, p3, p4]
+
+
+def fKin(dof):
+    return sp.linalg.expm(wrist*dof[2]) @ \
+            sp.linalg.expm(s3_in_brackets(0)*dof[0]) @ \
+            sp.linalg.expm(s3_in_brackets(1)*dof[1]) @ \
+            M(3) @ origin
+
+
+def inverseKin(dof_guess, desired):
+    error = 100
+    Tsb = fKin(dof_guess)
+    while (error > 0.1):
+        # twist_b = sp.linalg.logm(sp.linalg.inv(body)*dof_guess*desired[0])
+        J = np.transpose(np.array([
+            np.ndarray.flatten(wrist @ Tsb),
+            np.ndarray.flatten(s3_in_brackets(0) @ Tsb),
+            np.ndarray.flatten(s3_in_brackets(1) @ Tsb)
+        ]))
+        e = (desired @ origin - Tsb)
+        delta_theta = (np.linalg.pinv(J) @ np.ndarray.flatten(e))
+        dof_guess += delta_theta
+
+        Tsb = fKin(dof_guess)
+        error = np.linalg.norm(desired @ origin - Tsb)
+        print("error", error)
+        print("delta_theta", delta_theta)
+        print("dof", dof_guess)
+
+    dof_guess = np.array(list(dof % (2*np.pi) for dof in dof_guess))
+    for i in range(len(dof_guess)):
+        if (dof_guess[i] > np.pi/2):
+            dof_guess[i] -= 2*np.pi
+        if (dof_guess[i] < -np.pi/2):
+            dof_guess[i] += 2*np.pi
+
+    return dof_guess
+
+
+# print(inverseKin([-1, 1, 1, 1],
+#       np.array([
+#         [0, 0, 0, -1.13503349],
+#         [0, 0, 0,  2.00051721],
+#         [0, 0, 0, -1.11400442],
+#         [0, 0, 0,  1]
+#       ]))
+#       )
