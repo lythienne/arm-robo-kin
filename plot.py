@@ -2,7 +2,7 @@ from numpy import pi
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
-from arm import armPointsCoolerVersion, inverseKin
+from arm import armPointsCoolerVersion, inverseKin, fKin
 
 # Create the figure and the line that we will manipulate
 fig, ax = plt.subplot_mosaic([['up'], ['down']])
@@ -129,6 +129,8 @@ button = Button(resetax, 'Reset', hovercolor='0.975')
 
 
 def reset(event):
+    print("target transformation matrix:")
+    print(fKin([shoulder_angle.val, elbow_angle.val, base_angle.val]))
     shoulder_angle.reset()
     elbow_angle.reset()
     wrist_angle.reset()
@@ -144,7 +146,12 @@ button2 = Button(invax, 'Inverse', hovercolor='0.975')
 
 
 def compute_inv(event):
-    target = (-1.13503349, 2.00051721, -1.11400442)
+    desired = np.array([
+        [0.08330122, -0.83247037,  0.54777184, -1.5601959],
+        [0.99503078,  0.09956785,  0,  1.1732478],
+        [-0.05454046,  0.54504984,  0.83662776,  1.0215193],
+        [0,  0, 0, 1]
+        ])
     ax_vals = np.array([
             [1, 0, 0],
             [0, 1, 0],
@@ -152,12 +159,7 @@ def compute_inv(event):
             [0, 0, 1],
             [0, 0, 0],
         ]) @ \
-        inverseKin([-1, 1, 1], np.array([
-                    [0, 0, 0, target[0]],
-                    [0, 0, 0, target[1]],
-                    [0, 0, 0, target[2]],
-                    [0, 0, 0, 1]
-                    ]))
+        inverseKin([0, 0, 0], desired)
     set(ax_vals)
 
 
